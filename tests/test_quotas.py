@@ -8,8 +8,7 @@ from test_service import FakeProvider
 
 from search_router.config import Settings
 from search_router.contracts import QuotaObservation, SearchRequest
-from search_router.providers import (ProviderError, SerpAPIProvider,
-                                     json_request, retry_delay)
+from search_router.providers import ProviderError, SerpAPIProvider, json_request, retry_delay
 from search_router.providers.keys import KeyPool
 from search_router.providers.quotas import QuotaTracker
 from search_router.providers.tavily import TavilyProvider

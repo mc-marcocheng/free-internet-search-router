@@ -1,0 +1,17 @@
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: Ruff lint
+        entry: uv run --isolated --locked --extra dev ruff check --fix
+        language: system
+        require_serial: true
+        types_or: [python, pyi]
+        files: ^(src|tests|examples)/
+      - id: ruff-format
+        name: Ruff format
+        entry: uv run --isolated --locked --extra dev ruff format
+        language: system
+        require_serial: true
+        types_or: [python, pyi]
+        files: ^(src|tests|examples)/

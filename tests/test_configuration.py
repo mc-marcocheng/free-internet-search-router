@@ -545,8 +545,7 @@ def test_secret_prompt_refuses_echo_fallback(monkeypatch):
 
 
 def test_named_keys_and_bounded_previews_stay_aligned(tmp_path):
-    from search_router.management import (ConfigurationUpdate,
-                                          CredentialUpdate, Management)
+    from search_router.management import ConfigurationUpdate, CredentialUpdate, Management
 
     store = store_with_settings(tmp_path)
     management = Management(store)

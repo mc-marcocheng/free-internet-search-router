@@ -10,11 +10,15 @@ import httpx
 import jsonschema
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
-from pydantic import (Field, SecretStr, StringConstraints, field_validator,
-                      model_validator)
+from pydantic import Field, SecretStr, StringConstraints, field_validator, model_validator
 
-from ..contracts import (CapabilityIssue, ProviderCapabilities,
-                         QuotaObservation, SearchRequest, utcnow)
+from ..contracts import (
+    CapabilityIssue,
+    ProviderCapabilities,
+    QuotaObservation,
+    SearchRequest,
+    utcnow,
+)
 from .base import Batch, ProviderError
 from .config import CredentialConfig, validate_endpoint
 from .errors import check_http, error_object

@@ -2,8 +2,15 @@ from datetime import date, datetime, timezone
 from typing import Annotated, Literal
 from uuid import uuid4
 
-from pydantic import (BaseModel, ConfigDict, Field, JsonValue, RootModel,
-                      field_validator, model_validator)
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    JsonValue,
+    RootModel,
+    field_validator,
+    model_validator,
+)
 
 
 def utcnow() -> datetime:

@@ -1,8 +1,15 @@
 from typing import Annotated, ClassVar, Literal
 from urllib.parse import urlsplit
 
-from pydantic import (BaseModel, ConfigDict, Field, SecretStr,
-                      StringConstraints, field_validator, model_validator)
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SecretStr,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
 
 KeyName = Annotated[
     str,

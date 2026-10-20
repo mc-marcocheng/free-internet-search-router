@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8,<10", "pytest-asyncio>=0.25,<2", "ruff>=0.11,<1"]
+dev = ["pytest>=8,<10", "pytest-asyncio>=0.25,<2", "ruff>=0.11,<1", "pre-commit>=4,<5"]
 
 [project.scripts]
 search-router = "search_router.cli:main"
@@ -29,7 +29,7 @@ packages = ["src/search_router"]
 exclude = ["**/node_modules/**", "reader-output/**"]
 
 [tool.hatch.build.targets.sdist]
-include = ["src", "tests", "examples", "docs", ".github", "pyproject.toml", "uv.lock", "README.md", "CONTRIBUTING.md", "Dockerfile", "bootstrap.env.example", ".gitignore", ".dockerignore"]
+include = ["src", "tests", "examples", "docs", ".github", "pyproject.toml", "uv.lock", "README.md", "CONTRIBUTING.md", "Dockerfile", "bootstrap.env.example", ".gitignore", ".dockerignore", ".pre-commit-config.yaml"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
