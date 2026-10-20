@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.env
+*.egg-info/
+dist/
+.coverage
+node_modules/
+reader-output/
+*.sqlite3
+*.sqlite3-*
+*.db
+*.db-*
+*.key

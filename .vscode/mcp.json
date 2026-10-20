@@ -1,0 +1,12 @@
+{
+  "servers": {
+    "internet-search-router": {
+      "type": "http",
+      "url": "http://127.0.0.1:9092/mcp",
+      "headers": { "Authorization": "Bearer ${input:routerToken}" }
+    }
+  },
+  "inputs": [
+    { "id": "routerToken", "type": "promptString", "description": "Router client token", "password": true }
+  ]
+}

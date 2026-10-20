@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>Free Internet Search Router | Configuration</title>
+    <link rel="stylesheet" href="/admin/style.css" />
+    <script src="/admin/app.js" defer></script>
+  </head>
+  <body>
+    <header class="masthead">
+      <a class="brand" href="/admin"
+        ><svg aria-hidden="true" viewBox="0 0 24 24">
+          <use href="/admin/icons.svg#network"></use></svg
+        ><span>Search Router</span><span class="edition">CONSOLE</span></a
+      >
+      <div class="header-actions" id="header-actions" hidden>
+        <button
+          class="icon-button"
+          id="refresh"
+          title="Refresh configuration"
+          aria-label="Refresh configuration"
+        >
+          <svg viewBox="0 0 24 24">
+            <use href="/admin/icons.svg#refresh-cw"></use>
+          </svg>
+        </button>
+        <button
+          class="icon-button"
+          id="sign-out"
+          title="Sign out"
+          aria-label="Sign out"
+        >
+          <svg viewBox="0 0 24 24">
+            <use href="/admin/icons.svg#log-out"></use>
+          </svg>
+        </button>
+      </div>
+    </header>
+    <main id="login-screen" class="login-screen">
+      <form id="login-form" class="login-form">
+        <div class="section-kicker">WORKSPACE ACCESS</div>
+        <h1>Configuration</h1>
+        <label for="login-token">Administrator token</label>
+        <input
+          id="login-token"
+          type="password"
+          autocomplete="off"
+          required
+          autofocus
+        />
+        <button class="primary" type="submit">
+          <svg viewBox="0 0 24 24">
+            <use href="/admin/icons.svg#arrow-right"></use></svg
+          >Sign in
+        </button>
+        <p id="login-error" class="error" role="alert"></p>
+      </form>
+    </main>
+    <main id="workspace" class="workspace" hidden>
+      <aside class="sidebar" aria-label="Configuration navigation">
+        <nav id="navigation"></nav>
+      </aside>
+      <div class="work-area">
+        <div class="view-header">
+          <div>
+            <div class="section-kicker" id="view-kicker">PROVIDERS</div>
+            <h1 id="view-title"></h1>
+          </div>
+          <div class="save-actions">
+            <span id="save-state" role="status">All changes saved</span>
+            <button id="save" class="primary" disabled>
+              <svg viewBox="0 0 24 24">
+                <use href="/admin/icons.svg#save"></use></svg
+              >Save changes
+            </button>
+          </div>
+        </div>
+        <div id="notice" class="notice" role="status" hidden></div>
+        <form id="configuration-form" novalidate><div id="view"></div></form>
+      </div>
+    </main>
+    <dialog id="credential-dialog">
+      <form id="credential-form">
+        <div class="dialog-header">
+          <h2 id="credential-title"></h2>
+          <button
+            type="button"
+            id="close-dialog"
+            class="icon-button"
+            title="Close"
+            aria-label="Close"
+          >
+            <svg viewBox="0 0 24 24"><use href="/admin/icons.svg#x"></use></svg>
+          </button>
+        </div>
+        <div id="token-name-field" class="dialog-field" hidden>
+          <label for="token-name">Token name</label
+          ><input
+            id="token-name"
+            pattern="[a-zA-Z0-9_\-]{1,64}"
+            maxlength="64"
+            autocomplete="off"
+          />
+        </div>
+        <div id="key-name-field" class="dialog-field" hidden>
+          <label for="key-name">Key name</label>
+          <input id="key-name" maxlength="80" autocomplete="off" />
+        </div>
+        <div id="credential-value-field" class="dialog-field">
+          <label for="credential-value">New credential</label
+          ><input
+            id="credential-value"
+            type="password"
+            autocomplete="new-password"
+            maxlength="16384"
+          />
+        </div>
+        <p id="credential-error" class="error" role="alert"></p>
+        <div class="dialog-actions">
+          <button type="button" class="secondary" id="cancel-dialog">
+            Cancel</button
+          ><button id="credential-submit" class="primary" type="submit">
+            Save
+          </button>
+        </div>
+      </form>
+    </dialog>
+  </body>
+</html>

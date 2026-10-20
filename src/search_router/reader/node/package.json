@@ -1,0 +1,11 @@
+{
+  "name": "search-router-reader-runtime",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "test": "node --test reader.test.mjs",
+    "install-browser": "node --input-type=module -e \"import('cloakbrowser').then(m => m.ensureBinary()).then(() => console.log('Browser installed')).catch(() => { console.error('Browser installation failed'); process.exitCode = 1; })\""
+  },
+  "dependencies": { "mdream": "2.0.3", "cloakbrowser": "0.6.3", "playwright-core": "1.64.1" }
+}
