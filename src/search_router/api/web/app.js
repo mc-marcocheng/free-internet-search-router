@@ -257,6 +257,7 @@ function navigation() {
       document.createTextNode(names[name] || name),
     );
     item.addEventListener("click", () => {
+      if (currentView !== name) notice();
       currentView = name;
       render();
     });
@@ -272,6 +273,7 @@ function navigation() {
     ["advanced", "Advanced", "sliders-horizontal"],
   ]) {
     const item = button(label, symbol, () => {
+      if (currentView !== view) notice();
       currentView = view;
       render();
     });
@@ -517,9 +519,10 @@ async function runKeyAction(provider, index, name, action) {
       updateKeyHealth();
     } else if (!dirty) accept(document);
     const success = ["working", "refreshed"].includes(result.status);
-    notice(`${name}: ${humanize(result.status)}${success ? "" : ` · ${humanize(result.reason)}`}`, success ? "" : "warning");
+    if (currentView === provider)
+      notice(`${name}: ${humanize(result.status)}${success ? "" : ` · ${humanize(result.reason)}`}`, success ? "" : "warning");
   } catch (error) {
-    if (bearer) notice(error.message, "error");
+    if (bearer && currentView === provider) notice(error.message, "error");
   } finally {
     setBusy(false);
   }

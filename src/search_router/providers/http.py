@@ -3,13 +3,10 @@ from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 
 import httpx
+from babel import Locale, UnknownLocaleError
+from babel.core import parse_locale as parse_locale_identifier
 
-from ..contracts import (
-    CapabilityIssue,
-    SearchRequest,
-    SearchResult,
-    Usage,
-)
+from ..contracts import CapabilityIssue, SearchRequest, SearchResult, Usage
 from .base import Batch, ProviderError
 from .errors import check_http, error_object
 
@@ -30,6 +27,21 @@ def unsupported(request: SearchRequest, *fields: str, reason="unsupported_value"
             )
             for name in fields
         ],
+    )
+
+
+def locale_parts(request: SearchRequest) -> tuple[str, str | None, str | None]:
+    try:
+        explicit = parse_locale_identifier(request.locale or "", sep="-")
+        if explicit[0] == "und" or explicit[3]:
+            raise ValueError("unsupported locale identifier")
+        parsed = Locale.parse(request.locale or "", sep="-")
+    except (ValueError, UnknownLocaleError):
+        raise unsupported(request, "locale", reason="invalid_locale") from None
+    return (
+        parsed.language,
+        explicit[2] or parsed.script,
+        parsed.territory if explicit[1] else None,
     )
 
 

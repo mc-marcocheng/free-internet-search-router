@@ -303,7 +303,7 @@ async def test_exa_skip_diagnostics_survive_key_pool_and_preserve_fallback_const
         {
             "field": "locale",
             "value": "en",
-            "reason": "language_filter_not_supported",
+            "reason": "country_region_required",
         }
     ]
     assert attempt.key_attempts[0].diagnostics == attempt.diagnostics

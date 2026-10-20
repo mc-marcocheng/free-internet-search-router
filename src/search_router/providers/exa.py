@@ -22,7 +22,7 @@ from ..contracts import (
 from .base import Batch, ProviderError
 from .config import CredentialConfig, validate_endpoint
 from .errors import check_http, error_object
-from .http import normalize, unsupported
+from .http import locale_parts, normalize, unsupported
 
 
 class ExaConfig(CredentialConfig):
@@ -181,17 +181,25 @@ class ExaProvider:
             name=self.name,
             configured=bool(self.api_key or self.settings.keyless),
             categories=["general", "news"],
-            locales=[],
+            locales=None,
             time_ranges=["day", "week", "month", "year"],
             explicit_dates=True,
-            diagnostics=[self.discovery_status],
+            diagnostics=[
+                self.discovery_status,
+                "locale_requires_country_region",
+                "locale_country_bias_only",
+            ],
         )
 
     def arguments(self, request: SearchRequest) -> tuple[str, dict]:
+        country = None
         if request.locale:
-            raise unsupported(request, "locale", reason="language_filter_not_supported")
+            _, _, country = locale_parts(request)
+            if not country:
+                raise unsupported(request, "locale", reason="country_region_required")
         advanced = bool(
-            request.category == "news"
+            country
+            or request.category == "news"
             or request.include_domains
             or request.exclude_domains
             or request.time_range
@@ -202,6 +210,8 @@ class ExaProvider:
         args = {"query": request.query, "numResults": max(10, request.limit)}
         if advanced:
             args.update(textMaxCharacters=2000, enableSummary=False)
+            if country:
+                args["userLocation"] = country
             if request.category == "news":
                 args["category"] = "news"
             for local, remote in (
@@ -292,6 +302,7 @@ class ExaProvider:
                 "query": "query",
                 "numResults": "limit",
                 "category": "category",
+                "userLocation": "locale",
                 "includeDomains": "include_domains",
                 "excludeDomains": "exclude_domains",
                 "startPublishedDate": "time_range" if request.time_range else "start_date",
@@ -365,6 +376,9 @@ class ExaProvider:
             await charge()
             result = await session.call_tool(tool_name, args)
             payload = mcp_payload(result, self.name, tool_name)
-            return normalize(payload, self.name)
+            batch = normalize(payload, self.name)
+            if request.locale:
+                batch.warnings.append("locale_applied_as_country_bias")
+            return batch
 
         return await self._session(call)

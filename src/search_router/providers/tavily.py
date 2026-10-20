@@ -5,7 +5,7 @@ from pydantic import SecretStr
 from ..contracts import ProviderCapabilities, QuotaObservation, SearchRequest
 from .base import Batch, Charge, ProviderError
 from .config import CredentialConfig
-from .http import json_request, normalize, unsupported
+from .http import json_request, locale_parts, normalize, unsupported
 
 
 class TavilyConfig(CredentialConfig):
@@ -49,11 +49,16 @@ class TavilyProvider:
             "include_published_date": True,
         }
         if request.locale:
-            language = {"zh-TW": "zh-tw", "zh-Hant": "zh-tw", "zh-CN": "zh-cn"}.get(
-                request.locale, request.locale.split("-")[0].lower()
-            )
-            if "-" in request.locale and request.locale not in {"zh-TW", "zh-Hant", "zh-CN"}:
-                raise unsupported(request, "locale", reason="regional_locale_not_supported")
+            language, script, country = locale_parts(request)
+            if script or country:
+                variant = (
+                    {"Hant": ("zh-tw", "TW"), "Hans": ("zh-cn", "CN")}.get(script)
+                    if language == "zh"
+                    else None
+                )
+                if variant is None or country not in {None, variant[1]}:
+                    raise unsupported(request, "locale", reason="regional_locale_not_supported")
+                language = variant[0]
             payload.update(language=language, filter_by_language=True)
         for name in ("time_range", "start_date", "end_date"):
             value = getattr(request, name)

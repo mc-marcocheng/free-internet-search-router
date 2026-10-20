@@ -3,6 +3,7 @@ from datetime import date, timedelta
 from typing import ClassVar
 
 import httpx
+from babel import Locale
 from pydantic import SecretStr
 
 from ..contracts import (
@@ -14,7 +15,7 @@ from ..contracts import (
 )
 from .base import Batch, ProviderError
 from .config import CredentialConfig
-from .http import json_request, normalize, unsupported
+from .http import json_request, locale_parts, normalize, unsupported
 
 
 class SerpAPIConfig(CredentialConfig):
@@ -128,15 +129,14 @@ class SerpAPIProvider:
         elif request.category == "news":
             params["tbm"] = "nws"
         if request.locale and not bing:
-            language = {"zh-TW": "zh-TW", "zh-Hant": "zh-TW", "zh-CN": "zh-CN"}.get(
-                request.locale, request.locale.split("-")[0]
-            )
-            parts = request.locale.split("-")
+            language, script, country = locale_parts(request)
+            if script:
+                if language != "zh" or script not in {"Hans", "Hant"}:
+                    raise unsupported(request, "locale", reason="script_not_supported")
+                language = {"Hans": "zh-CN", "Hant": "zh-TW"}[script]
             params.update(hl=language, lr="lang_" + language)
-            if len(parts) == 2 and len(parts[1]) == 2:
-                params["gl"] = parts[1].lower()
-            elif len(parts) > 1 and request.locale != "zh-Hant":
-                raise unsupported(request, "locale")
+            if country:
+                params["gl"] = country.lower()
         if request.time_range and not bing:
             params["tbs"] = (
                 "qdr:" + {"day": "d", "week": "w", "month": "m", "year": "y"}[request.time_range]
@@ -172,28 +172,26 @@ class SerpAPIProvider:
     def bing_parameters(self, request: SearchRequest) -> dict:
         params = {"engine": "bing_news" if request.category == "news" else "bing"}
         if request.locale:
-            aliases = {"en": "en-US", "zh-hant": "zh-TW"}
+            language, script, country = locale_parts(request)
+            aliases = {("en", None): "en-US", ("zh", "Hant"): "zh-TW"}
             markets = {
-                value.lower(): value
-                for value in (
-                    "en-US",
-                    "en-GB",
-                    "en-AU",
-                    "en-CA",
-                    "zh-TW",
-                    "zh-CN",
-                    "zh-HK",
-                    "fr-FR",
-                    "de-DE",
-                    "ja-JP",
-                    "ko-KR",
-                    "es-ES",
-                    "it-IT",
-                    "pt-BR",
-                )
+                "en-US",
+                "en-GB",
+                "en-AU",
+                "en-CA",
+                "zh-TW",
+                "zh-CN",
+                "zh-HK",
+                "fr-FR",
+                "de-DE",
+                "ja-JP",
+                "ko-KR",
+                "es-ES",
+                "it-IT",
+                "pt-BR",
             }
-            market = aliases.get(request.locale.lower()) or markets.get(request.locale.lower())
-            if market is None:
+            market = f"{language}-{country}" if country else aliases.get((language, script))
+            if market not in markets or (script and Locale.parse(market, sep="-").script != script):
                 raise unsupported(request, "locale", reason="market_not_supported")
             params["mkt"] = market
         if request.category == "news":

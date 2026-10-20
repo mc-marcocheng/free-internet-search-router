@@ -179,7 +179,111 @@ async def test_rest_errors(body, status, reason):
         assert failure.value.reason == reason
 
 
-async def test_tavily_mapping():
+@pytest.mark.parametrize(
+    "locale,expected",
+    [
+        ("en", ("en", None, None)),
+        ("EN-us", ("en", None, "US")),
+        ("zh-Hant", ("zh", "Hant", None)),
+        ("zh-TW", ("zh", "Hant", "TW")),
+        ("zh-Hant-TW", ("zh", "Hant", "TW")),
+        ("fr", ("fr", None, None)),
+    ],
+)
+def test_locale_parts_normalizes_without_inventing_country(locale, expected):
+    from search_router.providers.http import locale_parts
+
+    request = SearchRequest(query="market", locale=locale)
+    assert locale_parts(request) == expected
+    assert request.locale == locale
+
+
+@pytest.mark.parametrize(
+    "kind,locale,reason",
+    [
+        (kind, locale, "invalid_locale")
+        for kind in ("google", "bing", "exa", "tavily")
+        for locale in ("und", "xx-US", "en-XX")
+    ]
+    + [
+        ("google", "sr-Latn", "script_not_supported"),
+        ("bing", "fr", "market_not_supported"),
+        ("bing", "fr-CA", "market_not_supported"),
+        ("bing", "zh-Hans-TW", "invalid_locale"),
+        ("tavily", "en-US", "regional_locale_not_supported"),
+        ("tavily", "zh-Hant-HK", "regional_locale_not_supported"),
+        ("tavily", "sr-Latn", "regional_locale_not_supported"),
+    ],
+)
+async def test_invalid_or_unsupported_locales_do_not_charge(monkeypatch, kind, locale, reason):
+    def forbidden_upstream(request):
+        pytest.fail("invalid or unsupported locales must not contact the upstream")
+
+    async def forbidden_charge():
+        pytest.fail("invalid or unsupported locales must not charge a search")
+
+    async def forbidden_session(operation):
+        pytest.fail("invalid locales must not open an upstream MCP session")
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(forbidden_upstream)) as client:
+        name = "serpapi" if kind in {"google", "bing"} else kind
+        configuration = {"keys": ["placeholder"]}
+        if name == "serpapi":
+            configuration["engine"] = kind
+        settings = Settings(providers={name: configuration})
+        if name == "serpapi":
+            provider = SerpAPIProvider(settings.providers[name], client)
+        elif name == "tavily":
+            provider = TavilyProvider(settings.providers[name], client)
+        else:
+            provider = ExaProvider(settings.providers[name], client)
+            monkeypatch.setattr(provider, "_session", forbidden_session)
+        with pytest.raises(ProviderError) as failure:
+            await provider.search(SearchRequest(query="market", locale=locale), forbidden_charge)
+    assert [issue.model_dump() for issue in failure.value.diagnostics] == [
+        {"field": "locale", "value": locale, "reason": reason}
+    ]
+
+
+@pytest.mark.parametrize(
+    "engine,locale,expected",
+    [
+        ("google", "en-US", {"hl": "en", "lr": "lang_en", "gl": "us"}),
+        ("google", "EN-us", {"hl": "en", "lr": "lang_en", "gl": "us"}),
+        ("google", "zh-Hant-TW", {"hl": "zh-TW", "lr": "lang_zh-TW", "gl": "tw"}),
+        ("google", "zh-Hant", {"hl": "zh-TW", "lr": "lang_zh-TW"}),
+        ("google", "zh-Hans-CN", {"hl": "zh-CN", "lr": "lang_zh-CN", "gl": "cn"}),
+        ("bing", "zh-Hant-TW", {"mkt": "zh-TW"}),
+        ("bing", "zh-Hant-HK", {"mkt": "zh-HK"}),
+        ("bing", "EN-us", {"mkt": "en-US"}),
+        ("bing", "en", {"mkt": "en-US"}),
+        ("bing", "zh-Hant", {"mkt": "zh-TW"}),
+    ],
+)
+async def test_serpapi_normalized_locale_mapping(engine, locale, expected):
+    calls = []
+
+    async def reserve():
+        calls.append(1)
+
+    def upstream(request):
+        assert calls == [1]
+        for name, value in expected.items():
+            assert request.url.params[name] == value
+        if engine == "google" and "gl" not in expected:
+            assert "gl" not in request.url.params
+        return httpx.Response(200, json={"organic_results": []})
+
+    settings = Settings(providers={"serpapi": {"keys": ["placeholder"], "engine": engine}})
+    async with httpx.AsyncClient(transport=httpx.MockTransport(upstream)) as client:
+        await SerpAPIProvider(settings.providers["serpapi"], client).search(
+            SearchRequest(query="market", locale=locale), reserve
+        )
+    assert calls == [1]
+
+
+@pytest.mark.parametrize("locale", ["zh-TW", "zh-Hant-TW", "ZH-hant-tw"])
+async def test_tavily_mapping(locale):
     import json
 
     def upstream(request):
@@ -197,7 +301,7 @@ async def test_tavily_mapping():
         ).search(
             SearchRequest(
                 query="market",
-                locale="zh-TW",
+                locale=locale,
                 category="news",
                 time_range="week",
                 include_domains=["example.org"],
@@ -214,16 +318,81 @@ def test_exa_official_text_and_advanced_json():
     assert normalize(data, "exa").results[0].published_at is None
     provider = ExaProvider(Settings(providers={"exa": {"keyless": True}}).providers["exa"])
     name, args = provider.arguments(
-        SearchRequest(query="market", category="news", time_range="day")
+        SearchRequest(query="market", category="news", time_range="day", locale="zh-TW")
     )
     assert name == "web_search_advanced_exa"
     assert args["category"] == "news"
+    assert args["userLocation"] == "TW"
     assert "startPublishedDate" in args
     with pytest.raises(ProviderError) as failure:
         provider.arguments(SearchRequest(query="market", locale="en"))
     assert [issue.model_dump() for issue in failure.value.diagnostics] == [
-        {"field": "locale", "value": "en", "reason": "language_filter_not_supported"}
+        {"field": "locale", "value": "en", "reason": "country_region_required"}
     ]
+
+
+@pytest.mark.parametrize(
+    "locale,country",
+    [
+        ("en-US", "US"),
+        ("en-GB", "GB"),
+        ("zh-TW", "TW"),
+        ("zh-Hant-TW", "TW"),
+        ("pt-BR", "BR"),
+        ("fr-ca", "CA"),
+    ],
+)
+def test_exa_regional_locale_uses_user_location(locale, country):
+    provider = ExaProvider(Settings(providers={"exa": {"keyless": True}}).providers["exa"])
+    name, args = provider.arguments(SearchRequest(query="market", locale=locale))
+    assert name == "web_search_advanced_exa"
+    assert args["userLocation"] == country
+    assert "locale" not in args
+    assert provider.capabilities().locales is None
+    assert "locale_country_bias_only" in provider.capabilities().diagnostics
+
+
+@pytest.mark.parametrize(
+    "locale,reason",
+    [
+        ("en", "country_region_required"),
+        ("fr", "country_region_required"),
+        ("zh-Hant", "country_region_required"),
+        ("en-USA", "invalid_locale"),
+        ("en-US-GB", "invalid_locale"),
+    ],
+)
+async def test_exa_locale_without_country_is_rejected_before_session(monkeypatch, locale, reason):
+    provider = ExaProvider(Settings(providers={"exa": {"keyless": True}}).providers["exa"])
+
+    async def forbidden_session(operation):
+        pytest.fail("a locale without a country must not open an upstream session")
+
+    monkeypatch.setattr(provider, "_session", forbidden_session)
+    with pytest.raises(ProviderError) as failure:
+        await provider.search(SearchRequest(query="market", locale=locale), charge)
+    assert [issue.model_dump() for issue in failure.value.diagnostics] == [
+        {"field": "locale", "value": locale, "reason": reason}
+    ]
+
+
+def test_exa_locale_preserves_domain_and_date_constraints():
+    provider = ExaProvider(Settings(providers={"exa": {"keyless": True}}).providers["exa"])
+    _, args = provider.arguments(
+        SearchRequest(
+            query="market",
+            locale="en-US",
+            include_domains=["example.org"],
+            exclude_domains=["example.net"],
+            start_date="2026-01-01",
+            end_date="2026-01-31",
+        )
+    )
+    assert args["userLocation"] == "US"
+    assert args["includeDomains"] == ["example.org"]
+    assert args["excludeDomains"] == ["example.net"]
+    assert args["startPublishedDate"] == "2026-01-01"
+    assert args["endPublishedDate"] == "2026-01-31"
 
 
 async def test_serpapi_account_not_search_health():
@@ -266,6 +435,7 @@ async def test_outbound_mcp_discovery_auth_and_repeated_concurrent_calls():
         transport_security=TransportSecuritySettings(allowed_hosts=["testserver"]),
     )
     calls = []
+    locations = []
 
     @server.tool()
     async def web_search_exa(query: str, numResults: int) -> dict:
@@ -279,6 +449,19 @@ async def test_outbound_mcp_discovery_auth_and_repeated_concurrent_calls():
                 }
             ],
         }
+
+    @server.tool()
+    async def web_search_advanced_exa(
+        query: str,
+        numResults: int,
+        userLocation: str,
+        textMaxCharacters: int,
+        enableSummary: bool,
+    ) -> dict:
+        assert textMaxCharacters == 2000
+        assert enableSummary is False
+        locations.append(userLocation)
+        return await web_search_exa(query, numResults)
 
     upstream = server.streamable_http_app()
 
@@ -299,8 +482,11 @@ async def test_outbound_mcp_discovery_auth_and_repeated_concurrent_calls():
 
     async with server.session_manager.run():
         discovered = await provider.discover()
-        assert discovered["tools"][0]["name"] == "web_search_exa"
-        assert provider.capabilities().locales == []
+        assert {tool["name"] for tool in discovered["tools"]} == {
+            "web_search_exa",
+            "web_search_advanced_exa",
+        }
+        assert provider.capabilities().locales is None
         batches = await asyncio.gather(
             *(provider.search(SearchRequest(query="market"), count_charge) for index in range(3))
         )
@@ -308,9 +494,15 @@ async def test_outbound_mcp_discovery_auth_and_repeated_concurrent_calls():
             batch.results[0].provider == "exa" and batch.results[0].engines == []
             for batch in batches
         )
-        with pytest.raises(Exception):
+        localized = await provider.search(
+            SearchRequest(query="market", locale="zh-Hant-TW"), count_charge
+        )
+        assert localized.results[0].provider == "exa"
+        assert "locale_applied_as_country_bias" in localized.warnings
+        with pytest.raises(ProviderError):
             await provider.search(SearchRequest(query="market", locale="fr"), count_charge)
-    assert len(calls) == len(charged) == 3
+    assert len(calls) == len(charged) == 4
+    assert locations == ["TW"]
 
 
 @pytest.mark.parametrize(
@@ -385,6 +577,20 @@ async def test_serpapi_rejects_mismatched_echoed_query():
             "week",
             "parameter_not_advertised",
         ),
+        (
+            {"locale": "en-US"},
+            "userLocation",
+            "locale",
+            "en-US",
+            "parameter_not_advertised",
+        ),
+        (
+            {"locale": "zh-TW"},
+            "userLocation",
+            "locale",
+            "zh-TW",
+            "schema_value_not_supported",
+        ),
         ({"category": "news"}, "category", "category", "news", "schema_value_not_supported"),
         ({}, "query", "query", None, "schema_value_not_supported"),
     ],
@@ -431,7 +637,8 @@ async def test_exa_schema_skips_identify_constraints_without_query_text(
     assert request.query not in str(failure.value.diagnostics)
 
 
-async def test_exa_missing_advanced_tool_is_diagnostic(monkeypatch):
+@pytest.mark.parametrize("updates", [{"category": "news"}, {"locale": "en-US"}])
+async def test_exa_missing_advanced_tool_is_diagnostic(monkeypatch, updates):
     provider = ExaProvider(Settings(providers={"exa": {"keyless": True}}).providers["exa"])
 
     async def session(operation):
@@ -439,7 +646,7 @@ async def test_exa_missing_advanced_tool_is_diagnostic(monkeypatch):
 
     monkeypatch.setattr(provider, "_session", session)
     with pytest.raises(ProviderError) as failure:
-        await provider.search(SearchRequest(query="Tencent", category="news"), charge)
+        await provider.search(SearchRequest(query="Tencent", **updates), charge)
     assert [issue.model_dump() for issue in failure.value.diagnostics] == [
         {
             "field": "tool",

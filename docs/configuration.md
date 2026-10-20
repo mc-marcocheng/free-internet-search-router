@@ -100,9 +100,15 @@ Initialization refuses to overwrite an existing database. Token names partition 
 | Provider | Local settings | Requirements and limitations |
 | --- | --- | --- |
 | SearXNG | `http_url` | Existing HTTP service, normally `http://localhost:9090`; JSON search output must be enabled |
-| Exa | `keys`, `keyless`, `url` | Uses Exa MCP; locale-constrained requests are skipped |
+| Exa | `keys`, `keyless`, `url` | Uses Exa MCP; country-qualified locales map to `userLocation`; language-only locales are skipped |
 | SerpAPI | `keys`, `engine` | Built-in engine default is `google`; `bing` supports general/Bing News |
 | Tavily | `keys`, `depth` | Depth defaults to `basic`; unsupported regional locales are skipped |
+
+Exa, SerpAPI, and Tavily use Babel to parse and normalize locale tags, including casing and language-script-region forms such as `zh-Hant-TW`. Unknown or invalid locales are skipped with `invalid_locale` before a search is charged. Parsing does not invent a country for a language-only or script-only locale. SearXNG continues to receive the original locale tag for its native language handling.
+
+Provider restrictions still apply after normalization. SerpAPI's Google engine maps language and Chinese script variants to `hl`/`lr` and an explicit country to `gl`; scripts it cannot preserve are rejected. Bing and Bing News map to the existing supported `mkt` whitelist, including `zh-Hant-TW` to `zh-TW`; the existing provider aliases `en` to `en-US` and `zh-Hant` to `zh-TW` remain, but other language-only tags do not acquire a country. Tavily maps supported Chinese variants to `zh-tw` or `zh-cn` and continues to reject unsupported regional constraints rather than dropping them.
+
+Exa maps the explicit country in a locale to the advanced MCP tool's `userLocation`: `en-US` becomes `US`, `zh-TW` and `zh-Hant-TW` become `TW`. This is country localization, not a strict language or result-origin filter; responses include `locale_applied_as_country_bias`. Language-only or script-only locales such as `en` and `zh-Hant` are skipped with `country_region_required`; no country is guessed. If the upstream tool does not advertise or accept `userLocation`, the request is skipped before a search is charged, with diagnostics identifying `locale`.
 
 These fields belong to provider-specific blocks in the persisted `providers` object. Change non-secret options with the UI or CLI; add keys through protected prompts:
 
